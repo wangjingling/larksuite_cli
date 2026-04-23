@@ -7,11 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	larkauth "github.com/larksuite/cli/internal/auth"
 	"github.com/larksuite/cli/internal/cmdutil"
@@ -24,10 +28,12 @@ import (
 
 type failWriter struct{}
 
+// Write implements the io.Writer interface but always fails.
 func (failWriter) Write([]byte) (int, error) {
 	return 0, errors.New("write failed")
 }
 
+// TestSuggestDomain_PrefixMatch tests the corresponding functionality.
 func TestSuggestDomain_PrefixMatch(t *testing.T) {
 	known := map[string]bool{
 		"calendar": true,
@@ -47,6 +53,7 @@ func TestSuggestDomain_PrefixMatch(t *testing.T) {
 	}
 }
 
+// TestSuggestDomain_NoMatch tests the corresponding functionality.
 func TestSuggestDomain_NoMatch(t *testing.T) {
 	known := map[string]bool{
 		"calendar": true,
@@ -58,6 +65,7 @@ func TestSuggestDomain_NoMatch(t *testing.T) {
 	}
 }
 
+// TestSuggestDomain_ExactMatch tests the corresponding functionality.
 func TestSuggestDomain_ExactMatch(t *testing.T) {
 	known := map[string]bool{
 		"calendar": true,
@@ -69,6 +77,7 @@ func TestSuggestDomain_ExactMatch(t *testing.T) {
 	}
 }
 
+// TestShortcutSupportsIdentity_DefaultUser tests the corresponding functionality.
 func TestShortcutSupportsIdentity_DefaultUser(t *testing.T) {
 	// Empty AuthTypes defaults to ["user"]
 	sc := common.Shortcut{AuthTypes: nil}
@@ -80,6 +89,7 @@ func TestShortcutSupportsIdentity_DefaultUser(t *testing.T) {
 	}
 }
 
+// TestShortcutSupportsIdentity_ExplicitTypes tests the corresponding functionality.
 func TestShortcutSupportsIdentity_ExplicitTypes(t *testing.T) {
 	sc := common.Shortcut{AuthTypes: []string{"user", "bot"}}
 	if !shortcutSupportsIdentity(sc, "user") {
@@ -93,6 +103,7 @@ func TestShortcutSupportsIdentity_ExplicitTypes(t *testing.T) {
 	}
 }
 
+// TestShortcutSupportsIdentity_BotOnly tests the corresponding functionality.
 func TestShortcutSupportsIdentity_BotOnly(t *testing.T) {
 	sc := common.Shortcut{AuthTypes: []string{"bot"}}
 	if shortcutSupportsIdentity(sc, "user") {
@@ -103,6 +114,7 @@ func TestShortcutSupportsIdentity_BotOnly(t *testing.T) {
 	}
 }
 
+// TestCompleteDomain tests the corresponding functionality.
 func TestCompleteDomain(t *testing.T) {
 	projects := registry.ListFromMetaProjects()
 	if len(projects) == 0 {
@@ -128,6 +140,7 @@ func TestCompleteDomain(t *testing.T) {
 	}
 }
 
+// TestCompleteDomain_CommaSeparated tests the corresponding functionality.
 func TestCompleteDomain_CommaSeparated(t *testing.T) {
 	projects := registry.ListFromMetaProjects()
 	if len(projects) == 0 {
@@ -143,6 +156,7 @@ func TestCompleteDomain_CommaSeparated(t *testing.T) {
 	}
 }
 
+// TestAllKnownDomains tests the corresponding functionality.
 func TestAllKnownDomains(t *testing.T) {
 	domains := allKnownDomains()
 	if len(domains) == 0 {
@@ -157,6 +171,7 @@ func TestAllKnownDomains(t *testing.T) {
 	}
 }
 
+// TestSortedKnownDomains tests the corresponding functionality.
 func TestSortedKnownDomains(t *testing.T) {
 	sorted := sortedKnownDomains()
 	if len(sorted) == 0 {
@@ -174,6 +189,7 @@ func TestSortedKnownDomains(t *testing.T) {
 	}
 }
 
+// TestGetShortcutOnlyDomainNames_HaveDescriptions tests the corresponding functionality.
 func TestGetShortcutOnlyDomainNames_HaveDescriptions(t *testing.T) {
 	for _, name := range getShortcutOnlyDomainNames() {
 		zhDesc := registry.GetServiceDescription(name, "zh")
@@ -187,6 +203,7 @@ func TestGetShortcutOnlyDomainNames_HaveDescriptions(t *testing.T) {
 	}
 }
 
+// TestCollectScopesForDomains tests the corresponding functionality.
 func TestCollectScopesForDomains(t *testing.T) {
 	projects := registry.ListFromMetaProjects()
 	if len(projects) == 0 {
@@ -219,6 +236,7 @@ func TestCollectScopesForDomains(t *testing.T) {
 	}
 }
 
+// TestCollectScopesForDomains_NonexistentDomain tests the corresponding functionality.
 func TestCollectScopesForDomains_NonexistentDomain(t *testing.T) {
 	scopes := collectScopesForDomains([]string{"nonexistent_domain_xyz"}, "user")
 	if len(scopes) != 0 {
@@ -226,6 +244,7 @@ func TestCollectScopesForDomains_NonexistentDomain(t *testing.T) {
 	}
 }
 
+// TestGetDomainMetadata_IncludesFromMeta tests the corresponding functionality.
 func TestGetDomainMetadata_IncludesFromMeta(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	nameSet := make(map[string]bool)
@@ -241,6 +260,7 @@ func TestGetDomainMetadata_IncludesFromMeta(t *testing.T) {
 	}
 }
 
+// TestGetDomainMetadata_IncludesShortcutOnlyDomains tests the corresponding functionality.
 func TestGetDomainMetadata_IncludesShortcutOnlyDomains(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	nameSet := make(map[string]bool)
@@ -255,6 +275,7 @@ func TestGetDomainMetadata_IncludesShortcutOnlyDomains(t *testing.T) {
 	}
 }
 
+// TestGetDomainMetadata_Sorted tests the corresponding functionality.
 func TestGetDomainMetadata_Sorted(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	for i := 1; i < len(domains); i++ {
@@ -264,6 +285,7 @@ func TestGetDomainMetadata_Sorted(t *testing.T) {
 	}
 }
 
+// TestGetDomainMetadata_HasTitleAndDescription tests the corresponding functionality.
 func TestGetDomainMetadata_HasTitleAndDescription(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	for _, dm := range domains {
@@ -273,6 +295,7 @@ func TestGetDomainMetadata_HasTitleAndDescription(t *testing.T) {
 	}
 }
 
+// TestAuthLoginRun_NonTerminal_NoFlags_RejectsWithHint tests the corresponding functionality.
 func TestAuthLoginRun_NonTerminal_NoFlags_RejectsWithHint(t *testing.T) {
 	f, _, stderr, _ := cmdutil.TestFactory(t, &core.CliConfig{
 		AppID: "cli_test", AppSecret: "secret", Brand: core.BrandFeishu,
@@ -295,6 +318,7 @@ func TestAuthLoginRun_NonTerminal_NoFlags_RejectsWithHint(t *testing.T) {
 	}
 }
 
+// TestEnsureRequestedScopesGranted tests the corresponding functionality.
 func TestEnsureRequestedScopesGranted(t *testing.T) {
 	issue := ensureRequestedScopesGranted("im:message:send im:message:reply", "im:message:reply", getLoginMsg("en"), nil)
 	if issue == nil {
@@ -313,6 +337,7 @@ func TestEnsureRequestedScopesGranted(t *testing.T) {
 	}
 }
 
+// TestBuildLoginScopeSummary tests the corresponding functionality.
 func TestBuildLoginScopeSummary(t *testing.T) {
 	summary := buildLoginScopeSummary("im:message:send im:message:reply im:message:send", "im:message:reply", "im:message:send im:message:reply im:chat:read")
 	if got := strings.Join(summary.Requested, " "); got != "im:message:send im:message:reply" {
@@ -332,6 +357,7 @@ func TestBuildLoginScopeSummary(t *testing.T) {
 	}
 }
 
+// TestWriteLoginSuccess_JSONIncludesScopeDiff tests the corresponding functionality.
 func TestWriteLoginSuccess_JSONIncludesScopeDiff(t *testing.T) {
 	f, stdout, _, _ := cmdutil.TestFactory(t, nil)
 
@@ -360,6 +386,7 @@ func TestWriteLoginSuccess_JSONIncludesScopeDiff(t *testing.T) {
 	}
 }
 
+// TestHandleLoginScopeIssue_NonJSONAlignsWithLoginSuccess tests the corresponding functionality.
 func TestHandleLoginScopeIssue_NonJSONAlignsWithLoginSuccess(t *testing.T) {
 	f, _, stderr, _ := cmdutil.TestFactory(t, nil)
 	err := handleLoginScopeIssue(&LoginOptions{}, getLoginMsg("zh"), f, &loginScopeIssue{
@@ -399,6 +426,7 @@ func TestHandleLoginScopeIssue_NonJSONAlignsWithLoginSuccess(t *testing.T) {
 	}
 }
 
+// TestHandleLoginScopeIssue_JSONAlignsWithLoginSuccess tests the corresponding functionality.
 func TestHandleLoginScopeIssue_JSONAlignsWithLoginSuccess(t *testing.T) {
 	f, stdout, _, _ := cmdutil.TestFactory(t, nil)
 	err := handleLoginScopeIssue(&LoginOptions{JSON: true}, getLoginMsg("en"), f, &loginScopeIssue{
@@ -433,6 +461,7 @@ func TestHandleLoginScopeIssue_JSONAlignsWithLoginSuccess(t *testing.T) {
 	}
 }
 
+// TestWriteLoginSuccess_JSONEmptySlicesNotNull tests the corresponding functionality.
 func TestWriteLoginSuccess_JSONEmptySlicesNotNull(t *testing.T) {
 	f, stdout, _, _ := cmdutil.TestFactory(t, nil)
 
@@ -455,6 +484,7 @@ func TestWriteLoginSuccess_JSONEmptySlicesNotNull(t *testing.T) {
 	}
 }
 
+// TestWriteLoginSuccess_TextOutputScenarios tests the corresponding functionality.
 func TestWriteLoginSuccess_TextOutputScenarios(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -540,6 +570,7 @@ func TestWriteLoginSuccess_TextOutputScenarios(t *testing.T) {
 	}
 }
 
+// TestBuildLoginScopeSummary_WithMissingScopes tests the corresponding functionality.
 func TestBuildLoginScopeSummary_WithMissingScopes(t *testing.T) {
 	summary := buildLoginScopeSummary("im:message:send im:message:reply", "im:message:reply", "im:message:reply")
 	if got := strings.Join(summary.NewlyGranted, " "); got != "" {
@@ -553,6 +584,7 @@ func TestBuildLoginScopeSummary_WithMissingScopes(t *testing.T) {
 	}
 }
 
+// TestAuthLoginRun_MissingRequestedScopeAlignsWithLoginSuccess tests the corresponding functionality.
 func TestAuthLoginRun_MissingRequestedScopeAlignsWithLoginSuccess(t *testing.T) {
 	keyring.MockInit()
 	setupLoginConfigDir(t)
@@ -666,6 +698,7 @@ func TestAuthLoginRun_MissingRequestedScopeAlignsWithLoginSuccess(t *testing.T) 
 	}
 }
 
+// TestAuthLoginRun_DeviceCodeUsesCachedRequestedScopes tests the corresponding functionality.
 func TestAuthLoginRun_DeviceCodeUsesCachedRequestedScopes(t *testing.T) {
 	keyring.MockInit()
 	setupLoginConfigDir(t)
@@ -767,6 +800,7 @@ func TestAuthLoginRun_DeviceCodeUsesCachedRequestedScopes(t *testing.T) {
 	}
 }
 
+// TestWriteLoginSuccess_TextOutputEnglishIncludesStatusHintWhenNoMissingScopes tests the corresponding functionality.
 func TestWriteLoginSuccess_TextOutputEnglishIncludesStatusHintWhenNoMissingScopes(t *testing.T) {
 	f, _, stderr, _ := cmdutil.TestFactory(t, nil)
 
@@ -792,6 +826,7 @@ func TestWriteLoginSuccess_TextOutputEnglishIncludesStatusHintWhenNoMissingScope
 	}
 }
 
+// TestAuthLoginRun_DeviceCodeTokenNilCleansScopeCache tests the corresponding functionality.
 func TestAuthLoginRun_DeviceCodeTokenNilCleansScopeCache(t *testing.T) {
 	keyring.MockInit()
 	setupLoginConfigDir(t)
@@ -829,6 +864,7 @@ func TestAuthLoginRun_DeviceCodeTokenNilCleansScopeCache(t *testing.T) {
 	}
 }
 
+// TestAuthLoginRun_JSONWriteFailure_NoWaitReturnsWriterError tests the corresponding functionality.
 func TestAuthLoginRun_JSONWriteFailure_NoWaitReturnsWriterError(t *testing.T) {
 	f, _, _, reg := cmdutil.TestFactory(t, &core.CliConfig{
 		ProfileName: "default",
@@ -866,6 +902,7 @@ func TestAuthLoginRun_JSONWriteFailure_NoWaitReturnsWriterError(t *testing.T) {
 	}
 }
 
+// TestAuthLoginRun_JSONWriteFailure_DeviceAuthorizationReturnsWriterError tests the corresponding functionality.
 func TestAuthLoginRun_JSONWriteFailure_DeviceAuthorizationReturnsWriterError(t *testing.T) {
 	f, _, _, reg := cmdutil.TestFactory(t, &core.CliConfig{
 		ProfileName: "default",
@@ -904,6 +941,559 @@ func TestAuthLoginRun_JSONWriteFailure_DeviceAuthorizationReturnsWriterError(t *
 	}
 }
 
+// TestFetchTokenViaGetter_Success tests the corresponding functionality.
+func TestFetchTokenViaGetter_Success(t *testing.T) {
+	// Setup a mock getter server
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+
+		// Send token back to the callback URL asynchronously
+		go func() {
+			// Small delay to ensure the local server is fully started
+			// (although it should be since fetchTokenViaGetter waits)
+			http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token?token=mock_token_data", state))
+		}()
+
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "Mock Getter")
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	// We need to temporarily disable openBrowser so it doesn't try to open a real browser
+	// Just for this test
+	originalOpenBrowser := openBrowserFn
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+	openBrowserFn = func(ctx context.Context, u string) error {
+		// Instead of opening browser, directly query the getter server
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+
+	var logs []string
+	logFn := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Open a goroutine to act as the browser for this specific test
+	// We intercept the log messages to find out what port to hit
+
+	token, err := fetchTokenViaGetter(ctx, getterURL, "test_scope", logFn)
+
+	if err != nil {
+		t.Fatalf("fetchTokenViaGetter failed: %v", err)
+	}
+
+	if token != "mock_token_data" {
+		t.Errorf("Expected token %q, got %q", "mock_token_data", token)
+	}
+}
+
+// TestFetchTokenViaGetter_MissingToken tests the corresponding functionality.
+func TestFetchTokenViaGetter_MissingToken(t *testing.T) {
+	// Setup a mock getter server that sends empty token
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+
+		go func() {
+			http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token", state))
+		}()
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	// We need to temporarily disable openBrowser so it doesn't try to open a real browser
+	// Just for this test
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	var logs []string
+	logFn := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = fetchTokenViaGetter(ctx, getterURL, "test_scope", logFn)
+
+	if err == nil {
+		t.Fatal("fetchTokenViaGetter should fail with missing token")
+	}
+
+	if !strings.Contains(err.Error(), "missing token data in callback request") {
+		t.Errorf("Expected missing token error, got: %v", err)
+	}
+}
+
+// TestFetchTokenViaGetter_Timeout tests the corresponding functionality.
+func TestFetchTokenViaGetter_Timeout(t *testing.T) {
+	// Setup a mock getter server that does nothing
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		// Do nothing, wait for timeout
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	// We need to temporarily disable openBrowser so it doesn't try to open a real browser
+	// Just for this test
+	originalOpenBrowser := openBrowserFn
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+	defer func() { openBrowserFn = originalOpenBrowser }()
+
+	var logs []string
+	logFn := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	// Create a short timeout context to trigger the timeout quickly
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	_, err = fetchTokenViaGetter(ctx, getterURL, "test_scope", logFn)
+
+	if err == nil {
+		t.Fatal("fetchTokenViaGetter should fail with timeout")
+	}
+
+	if !strings.Contains(err.Error(), "timeout waiting for token callback") && !strings.Contains(err.Error(), "context canceled") {
+		t.Errorf("Expected timeout or context canceled error, got: %v", err)
+	}
+}
+
+// TestAuthLoginViaGetter_SuccessWithAllFields tests the corresponding functionality.
+func TestAuthLoginViaGetter_SuccessWithAllFields(t *testing.T) {
+	keyring.MockInit()
+	setupLoginConfigDir(t)
+	t.Setenv("HOME", t.TempDir())
+
+	multi := &core.MultiAppConfig{
+		CurrentApp: "default",
+		Apps: []core.AppConfig{
+			{Name: "default", AppId: "cli_test", UserTokenGetterUrl: "http://example.com/getter"},
+		},
+	}
+	if err := core.SaveMultiAppConfig(multi); err != nil {
+		t.Fatalf("SaveMultiAppConfig() error = %v", err)
+	}
+
+	f, stdout, stderr, _ := cmdutil.TestFactory(t, &core.CliConfig{
+		ProfileName:        "default",
+		AppID:              "cli_test",
+		UserTokenGetterUrl: "http://example.com/getter",
+		Brand:              core.BrandFeishu,
+	})
+
+	// Instead of hitting the real fetchTokenViaGetter which would block,
+	// we will run authLoginRun but we need a way to mock fetchTokenViaGetter.
+	// We can't easily mock fetchTokenViaGetter without changing the production code to accept a mock.
+	// So we test authLoginViaGetter directly, and mock the HTTP server for the callback.
+
+	// We simulate what authLoginRun does but use a mocked local server that answers fetchTokenViaGetter
+	
+	// Mock openBrowserFn to prevent it from trying to open a real browser
+	originalOpenBrowser := openBrowserFn
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+
+	// Setup a mock getter server
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+
+		go func() {
+			tokenData := `{"access_token":"mock_user_access_token","expires_in":7200,"name":"Mock User","open_id":"ou_mock"}`
+
+			// Try a few times in case the local server isn't up yet
+			for i := 0; i < 5; i++ {
+				resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token?token=%s", state, url.QueryEscape(tokenData)))
+				if err == nil && resp.StatusCode == http.StatusOK {
+					resp.Body.Close()
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	// Update config to use our mock getter server
+	config := &core.CliConfig{
+		ProfileName:        "default",
+		AppID:              "cli_test",
+		UserTokenGetterUrl: getterURL,
+		Brand:              core.BrandFeishu,
+	}
+
+	opts := &LoginOptions{
+		Factory: f,
+		Ctx:     context.Background(),
+		Scope:   "test_scope",
+	}
+
+	var logs []string
+	logFn := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	err = authLoginViaGetter(opts, config, "test_scope", getLoginMsg("en"), logFn)
+
+	if err != nil {
+		t.Fatalf("authLoginViaGetter failed: %v", err)
+	}
+
+	// Check that the token was stored correctly
+	stored := larkauth.GetStoredToken("cli_test", "ou_mock")
+	if stored == nil {
+		t.Fatal("expected token to be stored")
+	}
+	if stored.AccessToken != "mock_user_access_token" {
+		t.Errorf("expected access token 'mock_user_access_token', got '%s'", stored.AccessToken)
+	}
+
+	// Check the profile was updated
+	cfg, err := core.LoadMultiAppConfig()
+	if err != nil {
+		t.Fatalf("LoadMultiAppConfig() error = %v", err)
+	}
+	if len(cfg.Apps) != 1 || len(cfg.Apps[0].Users) != 1 {
+		t.Fatalf("unexpected users in config: %#v", cfg.Apps)
+	}
+	if cfg.Apps[0].Users[0].UserOpenId != "ou_mock" {
+		t.Fatalf("stored user open id = %q", cfg.Apps[0].Users[0].UserOpenId)
+	}
+	if cfg.Apps[0].Users[0].UserName != "Mock User" {
+		t.Fatalf("stored user name = %q", cfg.Apps[0].Users[0].UserName)
+	}
+
+	// stdout shouldn't have much for text mode, stderr is tested via writeLoginSuccess elsewhere
+	_ = stdout
+	_ = stderr
+}
+
+// TestAuthLoginViaGetter_FallbackGetUserInfo tests the corresponding functionality.
+func TestAuthLoginViaGetter_FallbackGetUserInfo(t *testing.T) {
+	keyring.MockInit()
+	setupLoginConfigDir(t)
+	t.Setenv("HOME", t.TempDir())
+
+	multi := &core.MultiAppConfig{
+		CurrentApp: "default",
+		Apps: []core.AppConfig{
+			{Name: "default", AppId: "cli_test", UserTokenGetterUrl: "http://example.com/getter"},
+		},
+	}
+	if err := core.SaveMultiAppConfig(multi); err != nil {
+		t.Fatalf("SaveMultiAppConfig() error = %v", err)
+	}
+
+	f, _, _, reg := cmdutil.TestFactory(t, &core.CliConfig{
+		ProfileName:        "default",
+		AppID:              "cli_test",
+		UserTokenGetterUrl: "http://example.com/getter",
+		Brand:              core.BrandFeishu,
+	})
+
+	// Setup mock for user info since the getter won't return open_id and name
+	reg.Register(&httpmock.Stub{
+		Method: "GET",
+		URL:    larkauth.PathUserInfoV1,
+		Body: map[string]interface{}{
+			"code": 0,
+			"msg":  "ok",
+			"data": map[string]interface{}{
+				"open_id": "ou_fallback",
+				"name":    "Fallback User",
+			},
+		},
+	})
+	
+	// Mock openBrowserFn to prevent it from trying to open a real browser
+	originalOpenBrowser := openBrowserFn
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+
+	// Setup a mock getter server that returns ONLY access token
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+
+		go func() {
+			tokenData := `{"access_token":"mock_user_access_token_only"}`
+			for i := 0; i < 5; i++ {
+				resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token?token=%s", state, url.QueryEscape(tokenData)))
+				if err == nil && resp.StatusCode == http.StatusOK {
+					resp.Body.Close()
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
+
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	config := &core.CliConfig{
+		ProfileName:        "default",
+		AppID:              "cli_test",
+		UserTokenGetterUrl: getterURL,
+		Brand:              core.BrandFeishu,
+	}
+
+	opts := &LoginOptions{
+		Factory: f,
+		Ctx:     context.Background(),
+		Scope:   "test_scope",
+	}
+
+	var logs []string
+	logFn := func(format string, args ...interface{}) {
+		logs = append(logs, fmt.Sprintf(format, args...))
+	}
+
+	err = authLoginViaGetter(opts, config, "test_scope", getLoginMsg("en"), logFn)
+
+	if err != nil {
+		t.Fatalf("authLoginViaGetter failed: %v", err)
+	}
+
+	// Check that the token was stored with the fallback info
+	stored := larkauth.GetStoredToken("cli_test", "ou_fallback")
+	if stored == nil {
+		t.Fatal("expected token to be stored")
+	}
+	if stored.AccessToken != "mock_user_access_token_only" {
+		t.Errorf("expected access token 'mock_user_access_token_only', got '%s'", stored.AccessToken)
+	}
+
+	// Check the profile was updated
+	cfg, err := core.LoadMultiAppConfig()
+	if err != nil {
+		t.Fatalf("LoadMultiAppConfig() error = %v", err)
+	}
+	if len(cfg.Apps) != 1 || len(cfg.Apps[0].Users) != 1 {
+		t.Fatalf("unexpected users in config: %#v", cfg.Apps)
+	}
+	if cfg.Apps[0].Users[0].UserOpenId != "ou_fallback" {
+		t.Fatalf("stored user open id = %q", cfg.Apps[0].Users[0].UserOpenId)
+	}
+	if cfg.Apps[0].Users[0].UserName != "Fallback User" {
+		t.Fatalf("stored user name = %q", cfg.Apps[0].Users[0].UserName)
+	}
+}
+
+// TestAuthLoginViaGetter_InvalidJSON tests the corresponding functionality.
+func TestAuthLoginViaGetter_InvalidJSON(t *testing.T) {
+	f, _, _, _ := cmdutil.TestFactory(t, nil)
+
+	// Mock openBrowserFn to prevent it from trying to open a real browser
+	originalOpenBrowser := openBrowserFn
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+		go func() {
+			tokenData := `invalid_json`
+			for i := 0; i < 5; i++ {
+				resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token?token=%s", state, url.QueryEscape(tokenData)))
+				if err == nil {
+					resp.Body.Close()
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	config := &core.CliConfig{
+		UserTokenGetterUrl: getterURL,
+	}
+
+	opts := &LoginOptions{
+		Factory: f,
+		Ctx:     context.Background(),
+	}
+
+	err = authLoginViaGetter(opts, config, "", getLoginMsg("en"), func(string, ...interface{}) {})
+
+	if err == nil {
+		t.Fatal("expected error due to invalid json")
+	}
+	if !strings.Contains(err.Error(), "failed to unmarshal token JSON") {
+		t.Errorf("expected json unmarshal error, got: %v", err)
+	}
+}
+
+// TestAuthLoginViaGetter_NoAccessToken tests the corresponding functionality.
+func TestAuthLoginViaGetter_NoAccessToken(t *testing.T) {
+	f, _, _, _ := cmdutil.TestFactory(t, nil)
+
+	// Mock openBrowserFn to prevent it from trying to open a real browser
+	originalOpenBrowser := openBrowserFn
+	t.Cleanup(func() { openBrowserFn = originalOpenBrowser })
+	openBrowserFn = func(ctx context.Context, u string) error {
+		go func() {
+			// Small delay to ensure the mock HTTP server is ready
+			time.Sleep(10 * time.Millisecond)
+			http.Get(u)
+		}()
+		return nil
+	}
+
+	getterMux := http.NewServeMux()
+	getterMux.HandleFunc("/getter", func(w http.ResponseWriter, r *http.Request) {
+		state := r.URL.Query().Get("state")
+		go func() {
+			tokenData := `{"name":"User Without Token"}`
+			for i := 0; i < 5; i++ {
+				resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%s/user_access_token?token=%s", state, url.QueryEscape(tokenData)))
+				if err == nil {
+					resp.Body.Close()
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}()
+		w.WriteHeader(http.StatusOK)
+	})
+
+	getterServer := &http.Server{Addr: "127.0.0.1:0", Handler: getterMux}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start mock getter server: %v", err)
+	}
+	go getterServer.Serve(listener)
+	defer getterServer.Close()
+
+	getterURL := fmt.Sprintf("http://%s/getter", listener.Addr().String())
+
+	config := &core.CliConfig{
+		UserTokenGetterUrl: getterURL,
+	}
+
+	opts := &LoginOptions{
+		Factory: f,
+		Ctx:     context.Background(),
+	}
+
+	err = authLoginViaGetter(opts, config, "", getLoginMsg("en"), func(string, ...interface{}) {})
+
+	if err == nil {
+		t.Fatal("expected error due to missing access token")
+	}
+	if !strings.Contains(err.Error(), "no access_token returned") {
+		t.Errorf("expected no access_token error, got: %v", err)
+	}
+}
+
+// TestGetDomainMetadata_ExcludesEvent tests the corresponding functionality.
 func TestGetDomainMetadata_ExcludesEvent(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	for _, dm := range domains {
@@ -913,6 +1503,7 @@ func TestGetDomainMetadata_ExcludesEvent(t *testing.T) {
 	}
 }
 
+// TestAllKnownDomains_ExcludesAuthDomainChildren tests the corresponding functionality.
 func TestAllKnownDomains_ExcludesAuthDomainChildren(t *testing.T) {
 	domains := allKnownDomains()
 	if domains["whiteboard"] {
@@ -923,6 +1514,7 @@ func TestAllKnownDomains_ExcludesAuthDomainChildren(t *testing.T) {
 	}
 }
 
+// TestCollectScopesForDomains_ExpandsAuthDomainChildren tests the corresponding functionality.
 func TestCollectScopesForDomains_ExpandsAuthDomainChildren(t *testing.T) {
 	scopes := collectScopesForDomains([]string{"docs"}, "user")
 	// docs domain should include whiteboard shortcut scopes (board:whiteboard:*)
@@ -938,6 +1530,7 @@ func TestCollectScopesForDomains_ExpandsAuthDomainChildren(t *testing.T) {
 	}
 }
 
+// TestGetDomainMetadata_ExcludesAuthDomainChildren tests the corresponding functionality.
 func TestGetDomainMetadata_ExcludesAuthDomainChildren(t *testing.T) {
 	domains := getDomainMetadata("zh")
 	for _, dm := range domains {

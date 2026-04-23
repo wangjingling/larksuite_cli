@@ -20,10 +20,11 @@ import (
 // Identity represents the caller identity for API requests.
 type Identity string
 
+// The supported identities.
 const (
-	AsUser Identity = "user"
-	AsBot  Identity = "bot"
-	AsAuto Identity = "auto"
+	AsUser Identity = "user" // AsUser specifies the identity as a regular user.
+	AsBot  Identity = "bot"  // AsBot specifies the identity as an application bot.
+	AsAuto Identity = "auto" // AsAuto automatically determines identity based on available credentials.
 )
 
 // IsBot returns true if the identity is bot.
@@ -31,20 +32,21 @@ func (id Identity) IsBot() bool { return id == AsBot }
 
 // AppUser is a logged-in user record stored in config.
 type AppUser struct {
-	UserOpenId string `json:"userOpenId"`
-	UserName   string `json:"userName"`
+	UserOpenId string `json:"userOpenId"` // UserOpenId is the user open id
+	UserName   string `json:"userName"`   // UserName is the display name
 }
 
 // AppConfig is a per-app configuration entry (stored format — secrets may be unresolved).
 type AppConfig struct {
-	Name       string      `json:"name,omitempty"`
-	AppId      string      `json:"appId"`
-	AppSecret  SecretInput `json:"appSecret"`
-	Brand      LarkBrand   `json:"brand"`
-	Lang       string      `json:"lang,omitempty"`
-	DefaultAs  Identity    `json:"defaultAs,omitempty"` // AsUser | AsBot | AsAuto
-	StrictMode *StrictMode `json:"strictMode,omitempty"`
-	Users      []AppUser   `json:"users"`
+	Name               string      `json:"name,omitempty"`                  // Name of the app config
+	AppId              string      `json:"appId"`                           // AppId of the app
+	AppSecret          SecretInput `json:"appSecret"`                       // AppSecret storage ref
+	Brand              LarkBrand   `json:"brand"`                           // Brand environment
+	Lang               string      `json:"lang,omitempty"`                  // Lang for messages
+	DefaultAs          Identity    `json:"defaultAs,omitempty"`             // DefaultAs Identity (AsUser | AsBot | AsAuto)
+	UserTokenGetterUrl string      `json:"user_token_getter_url,omitempty"` // UserTokenGetterUrl defines an endpoint for fetching user tokens without manual authorization flow.
+	StrictMode         *StrictMode `json:"strictMode,omitempty"`            // StrictMode configuration
+	Users              []AppUser   `json:"users"`                           // Users authenticated
 }
 
 // ProfileName returns the display name for this app config.
@@ -58,10 +60,10 @@ func (a *AppConfig) ProfileName() string {
 
 // MultiAppConfig is the multi-app config file format.
 type MultiAppConfig struct {
-	StrictMode  StrictMode  `json:"strictMode,omitempty"`
-	CurrentApp  string      `json:"currentApp,omitempty"`
-	PreviousApp string      `json:"previousApp,omitempty"`
-	Apps        []AppConfig `json:"apps"`
+	StrictMode  StrictMode  `json:"strictMode,omitempty"` // StrictMode policy
+	CurrentApp  string      `json:"currentApp,omitempty"` // CurrentApp in use
+	PreviousApp string      `json:"previousApp,omitempty"`// PreviousApp used
+	Apps        []AppConfig `json:"apps"`                 // Apps configured
 }
 
 // CurrentAppConfig returns the currently active app config.
@@ -152,14 +154,15 @@ func ValidateProfileName(name string) error {
 
 // CliConfig is the resolved single-app config used by downstream code.
 type CliConfig struct {
-	ProfileName         string
-	AppID               string
-	AppSecret           string
-	Brand               LarkBrand
-	DefaultAs           Identity // AsUser | AsBot | AsAuto | "" (from config file)
-	UserOpenId          string
-	UserName            string
-	SupportedIdentities uint8 `json:"-"` // bitflag: 1=user, 2=bot; set by credential provider
+	ProfileName         string   // ProfileName in use
+	AppID               string   // AppID for auth
+	AppSecret           string   // AppSecret resolved
+	Brand               LarkBrand// Brand enum
+	DefaultAs           Identity // DefaultAs (AsUser | AsBot | AsAuto)
+	UserTokenGetterUrl  string   // UserTokenGetterUrl to fetch user access token automatically if provided
+	UserOpenId          string   // UserOpenId of the authenticated user
+	UserName            string   // UserName of the authenticated user
+	SupportedIdentities uint8    `json:"-"` // SupportedIdentities bitflag: 1=user, 2=bot; set by credential provider
 }
 
 // identityBotBit is the bit flag for bot identity in SupportedIdentities.
@@ -243,28 +246,33 @@ func ResolveConfigFromMulti(raw *MultiAppConfig, kc keychain.KeychainAccess, pro
 		}
 	}
 
-	if err := ValidateSecretKeyMatch(app.AppId, app.AppSecret); err != nil {
-		return nil, &ConfigError{Code: 2, Type: "config",
-			Message: "appId and appSecret keychain key are out of sync",
-			Hint:    err.Error()}
-	}
-
-	secret, err := ResolveSecretInput(app.AppSecret, kc)
-	if err != nil {
-		// If the error comes from the keychain, it will already be wrapped as an ExitError.
-		// For other errors (e.g. file read errors, unknown sources), wrap them as ConfigError.
-		var exitErr *output.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, exitErr
+	var secret string
+	var err error
+	if app.UserTokenGetterUrl == "" {
+		if err := ValidateSecretKeyMatch(app.AppId, app.AppSecret); err != nil {
+			return nil, &ConfigError{Code: 2, Type: "config",
+				Message: "appId and appSecret keychain key are out of sync",
+				Hint:    err.Error()}
 		}
-		return nil, &ConfigError{Code: 2, Type: "config", Message: err.Error()}
+
+		secret, err = ResolveSecretInput(app.AppSecret, kc)
+		if err != nil {
+			// If the error comes from the keychain, it will already be wrapped as an ExitError.
+			// For other errors (e.g. file read errors, unknown sources), wrap them as ConfigError.
+			var exitErr *output.ExitError
+			if errors.As(err, &exitErr) {
+				return nil, exitErr
+			}
+			return nil, &ConfigError{Code: 2, Type: "config", Message: err.Error()}
+		}
 	}
 	cfg := &CliConfig{
-		ProfileName: app.ProfileName(),
-		AppID:       app.AppId,
-		AppSecret:   secret,
-		Brand:       app.Brand,
-		DefaultAs:   app.DefaultAs,
+		ProfileName:        app.ProfileName(),
+		AppID:              app.AppId,
+		AppSecret:          secret,
+		Brand:              app.Brand,
+		DefaultAs:          app.DefaultAs,
+		UserTokenGetterUrl: app.UserTokenGetterUrl,
 	}
 	if len(app.Users) > 0 {
 		cfg.UserOpenId = app.Users[0].UserOpenId

@@ -16,14 +16,15 @@ import (
 // It intentionally mirrors only the resolved fields needed by runtime auth
 // and identity selection, without exposing core.CliConfig as a dependency.
 type Account struct {
-	ProfileName         string
-	AppID               string
-	AppSecret           string
-	Brand               core.LarkBrand
-	DefaultAs           core.Identity
-	UserOpenId          string
-	UserName            string
-	SupportedIdentities uint8
+	ProfileName         string         // ProfileName used
+	AppID               string         // AppID for auth
+	AppSecret           string         // AppSecret retrieved
+	Brand               core.LarkBrand // Brand environment
+	DefaultAs           core.Identity  // DefaultAs selected
+	UserTokenGetterUrl  string         // UserTokenGetterUrl endpoint to dynamically get a user token
+	UserOpenId          string         // UserOpenId logged in
+	UserName            string         // UserName logged in
+	SupportedIdentities uint8          // SupportedIdentities bitmask
 }
 
 const runtimePlaceholderAppSecret = "__LARKSUITE_CLI_TOKEN_ONLY__"
@@ -45,6 +46,7 @@ func RuntimeAppSecret(secret string) string {
 	return runtimePlaceholderAppSecret
 }
 
+// normalizeAccountAppSecret ensures empty secrets are converted to the placeholder.
 func normalizeAccountAppSecret(secret string) string {
 	if HasRealAppSecret(secret) {
 		return secret
@@ -63,6 +65,7 @@ func AccountFromCliConfig(cfg *core.CliConfig) *Account {
 		AppSecret:           normalizeAccountAppSecret(cfg.AppSecret),
 		Brand:               cfg.Brand,
 		DefaultAs:           cfg.DefaultAs,
+		UserTokenGetterUrl:  cfg.UserTokenGetterUrl,
 		UserOpenId:          cfg.UserOpenId,
 		UserName:            cfg.UserName,
 		SupportedIdentities: cfg.SupportedIdentities,
@@ -80,6 +83,7 @@ func (a *Account) ToCliConfig() *core.CliConfig {
 		AppSecret:           normalizeAccountAppSecret(a.AppSecret),
 		Brand:               a.Brand,
 		DefaultAs:           a.DefaultAs,
+		UserTokenGetterUrl:  a.UserTokenGetterUrl,
 		UserOpenId:          a.UserOpenId,
 		UserName:            a.UserName,
 		SupportedIdentities: a.SupportedIdentities,
@@ -96,11 +100,13 @@ type AccountProvider interface {
 // Uses string constants matching extension/credential.TokenType for zero-cost conversion.
 type TokenType string
 
+// The available token types.
 const (
-	TokenTypeUAT TokenType = "uat" // User Access Token
-	TokenTypeTAT TokenType = "tat" // Tenant Access Token
+	TokenTypeUAT TokenType = "uat" // TokenTypeUAT represents a User Access Token.
+	TokenTypeTAT TokenType = "tat" // TokenTypeTAT represents a Tenant Access Token.
 )
 
+// String returns the string representation of a TokenType.
 func (t TokenType) String() string { return string(t) }
 
 // ParseTokenType converts a string to TokenType.
@@ -117,28 +123,29 @@ func ParseTokenType(s string) (TokenType, bool) {
 
 // TokenSpec is the input to TokenProvider.ResolveToken.
 type TokenSpec struct {
-	Type  TokenType
-	AppID string // identifies which app (multi-account); not sensitive
+	Type  TokenType // Type of the token requested
+	AppID string    // AppID identifies which app (multi-account); not sensitive
 }
 
 // TokenResult is the output of TokenProvider.ResolveToken.
 type TokenResult struct {
-	Token  string
-	Scopes string // optional, space-separated; empty = skip scope pre-check
+	Token  string // Token actual token string
+	Scopes string // Scopes optional, space-separated; empty = skip scope pre-check
 }
 
 // IdentityHint is credential-layer guidance for resolving the effective identity.
 type IdentityHint struct {
-	DefaultAs core.Identity
-	AutoAs    core.Identity
+	DefaultAs core.Identity // DefaultAs specified by profile
+	AutoAs    core.Identity // AutoAs fallback option
 }
 
 // TokenUnavailableError reports that no usable token was available.
 type TokenUnavailableError struct {
-	Source string
-	Type   TokenType
+	Source string    // Source provider name
+	Type   TokenType // Type of token missing
 }
 
+// Error returns the error message indicating no token is available.
 func (e *TokenUnavailableError) Error() string {
 	if e.Source != "" {
 		return fmt.Sprintf("no %s available from credential source %q", e.Type, e.Source)
@@ -148,11 +155,12 @@ func (e *TokenUnavailableError) Error() string {
 
 // MalformedTokenResultError reports that a source returned an invalid token payload.
 type MalformedTokenResultError struct {
-	Source string
-	Type   TokenType
-	Reason string
+	Source string    // Source of the token
+	Type   TokenType // Type of token generated
+	Reason string    // Reason why it is malformed
 }
 
+// Error returns the error message indicating malformed token results.
 func (e *MalformedTokenResultError) Error() string {
 	return fmt.Sprintf("credential source %q returned malformed %s token: %s", e.Source, e.Type, e.Reason)
 }

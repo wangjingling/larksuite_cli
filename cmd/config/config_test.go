@@ -22,21 +22,32 @@ import (
 
 type noopConfigKeychain struct{}
 
+// Get retrieves a stored value.
 func (n *noopConfigKeychain) Get(service, account string) (string, error) { return "", nil }
+
+// Set stores a value.
 func (n *noopConfigKeychain) Set(service, account, value string) error    { return nil }
+
+// Remove deletes a stored value.
 func (n *noopConfigKeychain) Remove(service, account string) error        { return nil }
 
 type recordingConfigKeychain struct {
 	removed []string
 }
 
+// Get retrieves a stored value.
 func (r *recordingConfigKeychain) Get(service, account string) (string, error) { return "", nil }
+
+// Set stores a value.
 func (r *recordingConfigKeychain) Set(service, account, value string) error    { return nil }
+
+// Remove deletes a stored value and records the removal.
 func (r *recordingConfigKeychain) Remove(service, account string) error {
 	r.removed = append(r.removed, service+":"+account)
 	return nil
 }
 
+// TestConfigInitCmd_FlagParsing tests the corresponding functionality.
 func TestConfigInitCmd_FlagParsing(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, nil)
 	f.IOStreams.In = strings.NewReader("secret123\n")
@@ -62,6 +73,7 @@ func TestConfigInitCmd_FlagParsing(t *testing.T) {
 	}
 }
 
+// TestConfigShowCmd_FlagParsing tests the corresponding functionality.
 func TestConfigShowCmd_FlagParsing(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, &core.CliConfig{
 		AppID: "test-app", AppSecret: "test-secret", Brand: core.BrandFeishu,
@@ -81,6 +93,7 @@ func TestConfigShowCmd_FlagParsing(t *testing.T) {
 	}
 }
 
+// TestConfigShowRun_NotConfiguredReturnsStructuredError tests the corresponding functionality.
 func TestConfigShowRun_NotConfiguredReturnsStructuredError(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 
@@ -102,6 +115,7 @@ func TestConfigShowRun_NotConfiguredReturnsStructuredError(t *testing.T) {
 	}
 }
 
+// TestConfigShowRun_NoActiveProfileReturnsStructuredError tests the corresponding functionality.
 func TestConfigShowRun_NoActiveProfileReturnsStructuredError(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 	multi := &core.MultiAppConfig{
@@ -135,6 +149,7 @@ func TestConfigShowRun_NoActiveProfileReturnsStructuredError(t *testing.T) {
 	}
 }
 
+// TestConfigInitCmd_LangFlag tests the corresponding functionality.
 func TestConfigInitCmd_LangFlag(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, nil)
 
@@ -156,6 +171,7 @@ func TestConfigInitCmd_LangFlag(t *testing.T) {
 	}
 }
 
+// TestConfigInitCmd_LangDefault tests the corresponding functionality.
 func TestConfigInitCmd_LangDefault(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, nil)
 
@@ -177,6 +193,7 @@ func TestConfigInitCmd_LangDefault(t *testing.T) {
 	}
 }
 
+// TestHasAnyNonInteractiveFlag tests the corresponding functionality.
 func TestHasAnyNonInteractiveFlag(t *testing.T) {
 	tests := []struct {
 		name string
@@ -200,6 +217,7 @@ func TestHasAnyNonInteractiveFlag(t *testing.T) {
 	}
 }
 
+// TestConfigInitRun_NonTerminal_NoFlags_RejectsWithHint tests the corresponding functionality.
 func TestConfigInitRun_NonTerminal_NoFlags_RejectsWithHint(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, nil)
 	// TestFactory has IsTerminal=false by default
@@ -217,6 +235,7 @@ func TestConfigInitRun_NonTerminal_NoFlags_RejectsWithHint(t *testing.T) {
 	}
 }
 
+// TestConfigRemoveCmd_FlagParsing tests the corresponding functionality.
 func TestConfigRemoveCmd_FlagParsing(t *testing.T) {
 	f, _, _, _ := cmdutil.TestFactory(t, nil)
 
@@ -237,6 +256,7 @@ func TestConfigRemoveCmd_FlagParsing(t *testing.T) {
 	}
 }
 
+// TestConfigRemoveRun_SaveFailurePreservesExistingConfigAndSecrets tests the corresponding functionality.
 func TestConfigRemoveRun_SaveFailurePreservesExistingConfigAndSecrets(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", configDir)
@@ -297,6 +317,7 @@ func TestConfigRemoveRun_SaveFailurePreservesExistingConfigAndSecrets(t *testing
 	}
 }
 
+// TestSaveAsProfile_RejectsProfileNameCollisionWithExistingAppID tests the corresponding functionality.
 func TestSaveAsProfile_RejectsProfileNameCollisionWithExistingAppID(t *testing.T) {
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
 
@@ -311,7 +332,7 @@ func TestSaveAsProfile_RejectsProfileNameCollisionWithExistingAppID(t *testing.T
 		},
 	}
 
-	err := saveAsProfile(existing, keychain.KeychainAccess(&noopConfigKeychain{}), "cli_prod", "app-new", core.PlainSecret("new-secret"), core.BrandLark, "en")
+	err := saveAsProfile(existing, keychain.KeychainAccess(&noopConfigKeychain{}), "cli_prod", "app-new", core.PlainSecret("new-secret"), core.BrandLark, "en", "")
 	if err == nil {
 		t.Fatal("expected conflict error")
 	}
@@ -320,6 +341,7 @@ func TestSaveAsProfile_RejectsProfileNameCollisionWithExistingAppID(t *testing.T
 	}
 }
 
+// TestUpdateExistingProfileWithoutSecret_RejectsAppIDChange tests the corresponding functionality.
 func TestUpdateExistingProfileWithoutSecret_RejectsAppIDChange(t *testing.T) {
 	multi := &core.MultiAppConfig{
 		CurrentApp: "prod",
@@ -335,7 +357,7 @@ func TestUpdateExistingProfileWithoutSecret_RejectsAppIDChange(t *testing.T) {
 		},
 	}
 
-	err := updateExistingProfileWithoutSecret(multi, "", "app-new", core.BrandLark, "en")
+	err := updateExistingProfileWithoutSecret(multi, "", "app-new", core.BrandLark, "en", "")
 	if err == nil {
 		t.Fatal("expected error when changing app ID without a new secret")
 	}
@@ -347,10 +369,15 @@ func TestUpdateExistingProfileWithoutSecret_RejectsAppIDChange(t *testing.T) {
 // stubConfigExtProvider simulates env/sidecar credential mode for config guard tests.
 type stubConfigExtProvider struct{ name string }
 
+// Name returns the provider's name.
 func (s *stubConfigExtProvider) Name() string { return s.name }
+
+// ResolveAccount resolves the external credential account.
 func (s *stubConfigExtProvider) ResolveAccount(_ context.Context) (*extcred.Account, error) {
 	return &extcred.Account{AppID: "test-app"}, nil
 }
+
+// ResolveToken resolves the external token.
 func (s *stubConfigExtProvider) ResolveToken(_ context.Context, _ extcred.TokenSpec) (*extcred.Token, error) {
 	return nil, nil
 }
@@ -365,6 +392,7 @@ func newConfigFactoryWithExternalProvider(t *testing.T) *cmdutil.Factory {
 	return f
 }
 
+// TestConfigBlockedByExternalProvider tests the corresponding functionality.
 func TestConfigBlockedByExternalProvider(t *testing.T) {
 	f := newConfigFactoryWithExternalProvider(t)
 
